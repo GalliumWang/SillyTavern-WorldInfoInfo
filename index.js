@@ -26,26 +26,163 @@ let generationType;
 eventSource.on(event_types.GENERATION_STARTED, (genType)=>generationType = genType);
 
 const init = ()=>{
-    const trigger = document.createElement('div'); {
+    const trigger = document.createElement('button'); {
+        trigger.type = 'button';
         trigger.classList.add('stwii--trigger');
         trigger.classList.add('fa-solid', 'fa-fw', 'fa-book-atlas');
-        trigger.title = 'Active WI\n---\nright click for options';
+        trigger.title = 'Active WI\n---\nDrag to move; right click or long press for options';
+        trigger.setAttribute('aria-label', 'Active World Info; drag to move');
+        trigger.setAttribute('aria-controls', 'stwii--active-panel');
+        trigger.setAttribute('aria-expanded', 'false');
         trigger.addEventListener('click', ()=>{
-            panel.classList.toggle('stwii--isActive');
+            if (suppressClick) {
+                suppressClick = false;
+                return;
+            }
+            togglePanel(panel);
         });
         trigger.addEventListener('contextmenu', (evt)=>{
             evt.preventDefault();
-            configPanel.classList.toggle('stwii--isActive');
+            if (Date.now() < ignoreContextMenuUntil) return;
+            if (dragState && !dragState.moved) {
+                clearTimeout(longPressTimer);
+                dragState.longPressed = true;
+                suppressClick = true;
+                ignoreContextMenuUntil = Date.now() + 1000;
+            }
+            togglePanel(configPanel);
         });
         document.body.append(trigger);
     }
     const panel = document.createElement('div'); {
+        panel.id = 'stwii--active-panel';
         panel.classList.add('stwii--panel');
-        panel.innerHTML = '?';
+        const toolbar = document.createElement('div');
+        toolbar.classList.add('stwii--toolbar');
+        const heading = document.createElement('span');
+        heading.textContent = 'Active World Info';
+        toolbar.append(heading);
+        const options = document.createElement('button');
+        options.type = 'button';
+        options.classList.add('stwii--options', 'fa-solid', 'fa-gear');
+        options.title = 'Options';
+        options.setAttribute('aria-label', 'World Info options');
+        options.addEventListener('click', ()=>togglePanel(configPanel));
+        toolbar.append(options);
+        panel.append(toolbar);
         document.body.append(panel);
+    }
+    const panelContent = document.createElement('div'); {
+        panelContent.classList.add('stwii--panelContent');
+        panelContent.textContent = '?';
+        panel.append(panelContent);
     }
     const configPanel = document.createElement('div'); {
         configPanel.classList.add('stwii--panel');
+        configPanel.setAttribute('aria-label', 'World Info options');
+        document.body.append(configPanel);
+    }
+
+    const togglePanel = (target)=>{
+        const shouldOpen = !target.classList.contains('stwii--isActive');
+        panel.classList.remove('stwii--isActive');
+        configPanel.classList.remove('stwii--isActive');
+        if (shouldOpen) {
+            target.classList.add('stwii--isActive');
+            positionPanel(target);
+        }
+        trigger.setAttribute('aria-expanded', String(panel.classList.contains('stwii--isActive')));
+    };
+
+    const mobileQuery = window.matchMedia('(max-width: 800px)');
+    const margin = 8;
+    const clamp = (value, min, max)=>Math.min(Math.max(value, min), Math.max(min, max));
+    const viewport = ()=>({ width: window.innerWidth, height: window.innerHeight });
+    const positionKey = ()=>mobileQuery.matches ? 'mobile' : 'desktop';
+    const setTriggerPosition = (left, top)=>{
+        const { width, height } = viewport();
+        trigger.style.left = `${clamp(left, margin, width - trigger.offsetWidth - margin)}px`;
+        trigger.style.top = `${clamp(top, margin, height - trigger.offsetHeight - margin)}px`;
+        trigger.style.right = 'auto';
+        trigger.style.bottom = 'auto';
+        for (const openPanel of [panel, configPanel]) positionPanel(openPanel);
+    };
+    const restoreTriggerPosition = ()=>{
+        const { width, height } = viewport();
+        const saved = extension_settings.worldInfoInfo?.triggerPositions?.[positionKey()];
+        const availableWidth = Math.max(0, width - trigger.offsetWidth - margin * 2);
+        const availableHeight = Math.max(0, height - trigger.offsetHeight - margin * 2);
+        const x = Number.isFinite(saved?.x) ? saved.x : (mobileQuery.matches ? 1 : 0);
+        const y = Number.isFinite(saved?.y) ? saved.y : (mobileQuery.matches ? 0.42 : 1);
+        setTriggerPosition(margin + clamp(x, 0, 1) * availableWidth, margin + clamp(y, 0, 1) * availableHeight);
+    };
+    const saveTriggerPosition = ()=>{
+        const { width, height } = viewport();
+        const settings = extension_settings.worldInfoInfo ??= {};
+        const positions = settings.triggerPositions ??= {};
+        positions[positionKey()] = {
+            x: clamp((trigger.offsetLeft - margin) / Math.max(1, width - trigger.offsetWidth - margin * 2), 0, 1),
+            y: clamp((trigger.offsetTop - margin) / Math.max(1, height - trigger.offsetHeight - margin * 2), 0, 1),
+        };
+        saveSettingsDebounced();
+    };
+    function positionPanel(target) {
+        if (!target.classList.contains('stwii--isActive')) return;
+        const { width, height } = viewport();
+        const button = trigger.getBoundingClientRect();
+        const gap = 10;
+        const panelWidth = target.offsetWidth;
+        const panelHeight = target.offsetHeight;
+        const right = button.right + gap;
+        const left = button.left - panelWidth - gap;
+        const panelLeft = right + panelWidth <= width - margin ? right : left >= margin ? left : button.left;
+        target.style.left = `${clamp(panelLeft, margin, width - panelWidth - margin)}px`;
+        target.style.top = `${clamp(button.top, margin, height - panelHeight - margin)}px`;
+    }
+
+    let dragState = null;
+    let suppressClick = false;
+    let ignoreContextMenuUntil = 0;
+    let longPressTimer;
+    trigger.addEventListener('pointerdown', (evt)=>{
+        if (evt.button !== 0 || !evt.isPrimary) return;
+        const bounds = trigger.getBoundingClientRect();
+        dragState = { id: evt.pointerId, x: evt.clientX, y: evt.clientY, left: bounds.left, top: bounds.top, moved: false, longPressed: false };
+        trigger.setPointerCapture(evt.pointerId);
+        longPressTimer = setTimeout(()=>{
+            if (!dragState || dragState.moved) return;
+            dragState.longPressed = true;
+            suppressClick = true;
+            ignoreContextMenuUntil = Date.now() + 1000;
+            togglePanel(configPanel);
+        }, 650);
+    });
+    trigger.addEventListener('pointermove', (evt)=>{
+        if (!dragState || dragState.id !== evt.pointerId || dragState.longPressed) return;
+        const dx = evt.clientX - dragState.x;
+        const dy = evt.clientY - dragState.y;
+        if (!dragState.moved && Math.hypot(dx, dy) < 6) return;
+        dragState.moved = true;
+        clearTimeout(longPressTimer);
+        evt.preventDefault();
+        setTriggerPosition(dragState.left + dx, dragState.top + dy);
+    });
+    const endDrag = (evt)=>{
+        if (!dragState || dragState.id !== evt.pointerId) return;
+        clearTimeout(longPressTimer);
+        if (dragState.moved) {
+            saveTriggerPosition();
+            suppressClick = true;
+        }
+        if (suppressClick) setTimeout(()=>suppressClick = false, 500);
+        if (trigger.hasPointerCapture(evt.pointerId)) trigger.releasePointerCapture(evt.pointerId);
+        dragState = null;
+    };
+    trigger.addEventListener('pointerup', endDrag);
+    trigger.addEventListener('pointercancel', endDrag);
+    window.addEventListener('resize', restoreTriggerPosition);
+    mobileQuery.addEventListener('change', restoreTriggerPosition);
+    restoreTriggerPosition();
         const rowGroup = document.createElement('label'); {
             rowGroup.classList.add('stwii--configRow');
             rowGroup.title = 'Group entries by World Info book';
@@ -112,8 +249,6 @@ const init = ()=>{
             }
             configPanel.append(mesRow);
         }
-        document.body.append(configPanel);
-    }
 
     let entries = [];
 
@@ -147,7 +282,7 @@ const init = ()=>{
     let currentEntryList = [];
     let currentChat = [];
     eventSource.on(event_types.WORLD_INFO_ACTIVATED, async(entryList)=>{
-        panel.innerHTML = 'Updating...';
+        panelContent.textContent = 'Updating...';
         updateBadge(entryList.map(it=>`${it.world}§§§${it.uid}`));
         for (const entry of entryList) {
             entry.type = 'wi';
@@ -171,7 +306,7 @@ const init = ()=>{
         const isGrouped = extension_settings.worldInfoInfo?.group ?? true;
         const isOrdered = extension_settings.worldInfoInfo?.order ?? true;
         const isMes = extension_settings.worldInfoInfo?.mes ?? true;
-        panel.innerHTML = '';
+        panelContent.replaceChildren();
         let grouped;
         if (isGrouped) {
             grouped = Object.groupBy(entryList, (it,idx)=>it.world);
@@ -188,7 +323,7 @@ const init = ()=>{
             const w = document.createElement('div'); {
                 w.classList.add('stwii--world');
                 w.textContent = world;
-                panel.append(w);
+                panelContent.append(w);
                 entries.sort((a,b)=>{
                     if (isOrdered) {
                         // order by strategy / depth / order
@@ -358,11 +493,12 @@ const init = ()=>{
                             sticky.title = `Sticky for ${entry.sticky} more rounds`;
                             e.append(sticky);
                         }
-                        panel.append(e);
+                        panelContent.append(e);
                     }
                 }
             }
         }
+        positionPanel(panel);
     };
 
     //! HACK: no event when no entries are activated, only a debug message
@@ -373,7 +509,7 @@ const init = ()=>{
             '[WI] Adding 0 entries to prompt',
         ];
         if (triggers.includes(args[0])) {
-            panel.innerHTML = 'No active entries';
+            panelContent.textContent = 'No active entries';
             updateBadge([]);
             currentEntryList = [];
         }
@@ -386,7 +522,7 @@ const init = ()=>{
             '[WI] Adding 0 entries to prompt',
         ];
         if (triggers.includes(args[0])) {
-            panel.innerHTML = 'No active entries';
+            panelContent.textContent = 'No active entries';
             updateBadge([]);
             currentEntryList = [];
         }

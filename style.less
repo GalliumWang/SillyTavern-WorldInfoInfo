@@ -1,15 +1,27 @@
 .stwii--trigger {
-    position: absolute;
-    bottom: 0.125em;
-    left: 0.25em;
+    position: fixed;
+    bottom: 8px;
+    left: 8px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--SmartThemeBodyColor, inherit);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
     font-size: 2em;
     opacity: 0.25;
     transition: opacity 200ms;
     cursor: pointer;
     z-index: 3010;
     filter: drop-shadow(2px 4px 6px black);
-    display: block;
-    anchor-name: --stac--wiAnchor;
+    touch-action: none;
+    user-select: none;
+
+    &:hover, &:focus-visible { opacity: 1; }
 
     &:not([data-stwii--badge-count="0"]) {
         &:hover::after { opacity: 1; }
@@ -44,6 +56,18 @@
         }
     }
 }
+@media (max-width: 800px) {
+    .stwii--trigger {
+        top: 42vh;
+        right: 16px;
+        bottom: auto;
+        left: auto;
+        border: 1px solid var(--SmartThemeBorderColor, currentColor);
+        border-radius: 50%;
+        background: var(--secondaryBg, var(--SmartThemeBlurTintColor));
+        opacity: 0.9;
+    }
+}
 
 .stwii--panel {
     filter: drop-shadow(1px 1px 2px var(--black50a));
@@ -54,21 +78,31 @@
     padding: 0.5em;
     display: none;
     flex-direction: column;
-    right: 3.5em;
-    top: 1em;
+    width: max-content;
     font-size: small;
-    max-height: calc(100vh - 1em);
-    max-width: calc((100vw - var(--sheldWidth)) / 2 - 3.5em);
+    max-height: calc(100vh - 16px);
+    max-width: min(22rem, calc(100vw - 16px));
     background-color: var(--secondaryBg, var(--SmartThemeBlurTintColor));
     position: fixed;
-    position-anchor: --stac--wiAnchor;
-    position-area: top right;
-    position-try-fallbacks: flip-block, flip-inline;
-    margin-bottom: -2em;
 
     &.stwii--isActive {
         display: flex;
     }
+}
+.stwii--toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+    font-weight: bold;
+}
+.stwii--options {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    min-width: 28px;
+    min-height: 28px;
 }
 
 
