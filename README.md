@@ -6,6 +6,6 @@ Tap or click the book to see the list of active entries. On mobile, it starts as
 
 Open options with the gear in the entries panel, a right click, or a long press on the book. Dragging does not open the entries panel.
 
-To install this fork, use SillyTavern's Extensions → Install extension. Enter `https://github.com/GalliumWang/SillyTavern-WorldInfoInfo` as the URL and `fix/mobile-floating-trigger` as the branch.
+To install this fork, use SillyTavern's Extensions → Install extension. Enter `https://github.com/GalliumWang/SillyTavern-WorldInfoInfo` as the URL. The default `master` branch contains the mobile fix.
 
 ![](./README/stwii-01.png)
